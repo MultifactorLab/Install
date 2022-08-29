@@ -1,0 +1,17 @@
+[Unit]
+Description=Self Service Portal
+
+[Service]
+WorkingDirectory=__working_dir__
+ExecStart=/usr/bin/dotnet __dll__
+Restart=always
+RestartSec=10
+KillSignal=SIGINT
+TimeoutStopSec=90
+SyslogIdentifier=ssp-service
+User=__user__
+Environment=ASPNETCORE_ENVIRONMENT=production
+Environment=DOTNET_PRINT_TELEMETRY_MESSAGE=false
+
+[Install]
+WantedBy=multi-user.target
