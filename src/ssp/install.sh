@@ -80,7 +80,7 @@ cleanup() {
 ##  Get main files  ##
 ######################
 
-REPO_BASE_PATH="https://raw.githubusercontent.com/apashkov-ext/sspl-installer/main/src"
+REPO_BASE_PATH="https://raw.githubusercontent.com/MultifactorLab/Install/main/src/ssp"
 
 COMMON_FILENAME="common.sh"
 VAR_FILENAME="variables.sh"
