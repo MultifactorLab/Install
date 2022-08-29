@@ -4,6 +4,8 @@ write_log "\nCreating a service"
 write_log " - Setting up service config files"
 
 SERVIE_FILE="/etc/systemd/system/${MFA_SSP_SERVICE_FILE}"
+
+sudo chmod -R 777 /etc/systemd/system/
 sudo cat "${MFA_SCRIPT_DIR}/templates/service" > "${SERVIE_FILE}"
 
 sudo sed -i "s:__working_dir__:$MFA_APP_DIR:g" "${SERVIE_FILE}"
