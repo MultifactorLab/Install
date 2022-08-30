@@ -13,7 +13,7 @@ write_log " - Starting nginx..."
 } &>> "${MFA_OUTPUT_FILE}"
 assert_success
 
-sudo chmod 777 /etc/nginx/sites-available/
+sudo chmod a+rw /etc/nginx/sites-available/
 
 SITE_FILE="/etc/nginx/sites-available/${MFA_SSP_NGINX_FILE}"
 write_log " - Configuring server..."

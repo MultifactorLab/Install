@@ -19,9 +19,6 @@ assert_success
 } &>> "${MFA_OUTPUT_FILE}"
 assert_success
 
-sleep .3
-
-
 write_log " - Installing the .NET 6 runtime..."
 {
 	sudo apt-get update && sudo apt-get install -y aspnetcore-runtime-6.0
