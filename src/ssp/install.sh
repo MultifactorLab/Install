@@ -34,7 +34,7 @@ else
 fi
 
 _SKIPPED_STEPS=( "EMPTY" )
-_OFFLINE_MODE=1
+_OFFLINE_MODE=0
 _TRASH=()
 cleanup() {
     trap - SIGINT SIGTERM ERR EXIT
