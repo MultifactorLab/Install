@@ -1,11 +1,14 @@
 #!/usr/bin/env bash
-set -euo pipefail
-trap cleanup SIGINT SIGTERM ERR EXIT
+set -uo pipefail
 
+SCRIPT_VERSION="1.0"
+
+# Error codes
 ERR_SUDO_PRIV=64
-ERR_SCRIPT_DWNLD=65
+ERR_SCR_NOT_FOUND=65
 ERR_UNKNOWN_OS=66
 ERR_UNSUPPORTED_OS=67
+ERR_ALREADY_EXECUTING=68
 
 # Run as a superuser and do not ask for a password. Exit status as successful
 sudo -n true
@@ -16,11 +19,40 @@ if (( $? != 0 )); then
     echo "You should have sudo privilege to run this script"
     exit $ERR_SUDO_PRIV
 fi
-
+# current dir
 MFA_SCRIPT_DIR="$(dirname ${BASH_SOURCE[0]})"
+# log file
 MFA_OUTPUT_FILE="$MFA_SCRIPT_DIR/install-log.txt"
-_TRASH=()
+
+# prevent to start multiple script instances
+LOCKFILE="${MFA_SCRIPT_DIR}/lock"
+if [ -f "${LOCKFILE}" ]; then
+    echo -e "Only one script instance can be run!\nStop another instance or remove this file: ${LOCKFILE}"
+    exit $ERR_ALREADY_EXECUTING
+else 
+    touch "${LOCKFILE}"
+fi
+
 _SKIPPED_STEPS=( "EMPTY" )
+_OFFLINE_MODE=1
+_TRASH=()
+cleanup() {
+    trap - SIGINT SIGTERM ERR EXIT
+    sudo rm -f "${LOCKFILE}"
+
+    if (( $_OFFLINE_MODE == 0 )); then
+        for path in "${_TRASH[@]}"; do
+            if [ -d "${path}" ] && [ -e "${path}" ]; then
+                sudo rm -r "${path}"
+            fi
+
+            if [ -f "${path}" ] && [ -e "${path}" ]; then
+                sudo rm "${path}"
+            fi
+        done
+    fi
+}
+trap cleanup SIGINT SIGTERM ERR EXIT
 
 function try_download() {
     {
@@ -30,8 +62,8 @@ function try_download() {
 
 function check_file_exists() {
     if [ ! -f "${1}" ]; then
-        echo -e "Something went wrong while getting scripts from server.\nFor more information see logs."
-        exit $ERR_SCRIPT_DWNLD
+        echo -e "Script file was not found: ${1}.\nFor more information see logs."
+        exit $ERR_SCR_NOT_FOUND
     fi  
 }
 
@@ -45,33 +77,16 @@ function mark_as_trash() {
 
 usage() {
     cat <<EOF
-Usage: $(basename "${BASH_SOURCE[0]}") [-o] [-ns] [-f] -p param_value arg1 [arg2...]
+Usage: $(basename "${BASH_SOURCE[0]}") [-o] -p param_value arg1 [arg2...]
 
 Script description here.
 
 Available options:
 
--o,  --offline      Prevent to download resources from MultifactorLab repositories,
--sn, --skip-nginx   Skip nginx configuration step,
--sl, --skip-ssl     Skip SSL configuration step,
--ss, --skip-service   Prevent to download resources from MultifactorLab repositories
+-o,  --offline      prevent to download resources from the MultifactorLab repositories
+-s,  --skip
 EOF
     exit
-}
-
-cleanup() {
-  trap - SIGINT SIGTERM ERR EXIT
-  for path in "${_TRASH[@]}"; do
-
-    if [ -d "${path}" ] && [ -e "${path}" ]; then
-        sudo rm -r "${path}"
-    fi
-
-    if [ -f "${path}" ] && [ -e "${path}" ]; then
-        sudo rm "${path}"
-    fi
-
-  done
 }
 
 
@@ -96,9 +111,12 @@ function get_req_files() {
     for file in "${files[@]}"; do
         local f_name=$( get_filename_from_path "${file}" )
         local file_path="${MFA_SCRIPT_DIR}/${f_name}"
-        try_download "${REPO_BASE_PATH}/${file}" "${file_path}"
+
+        if (( $_OFFLINE_MODE == 0 )); then
+            try_download "${REPO_BASE_PATH}/${file}" "${file_path}"
+        fi
+       
         check_file_exists "${file_path}"
-        
         mark_as_trash "${file_path}"
     done
 }
@@ -116,15 +134,15 @@ function write_log() {
 ########################
 ##  Check OS version  ##
 ########################
-OS_VER=$( get_os_info )
-if [[ -z "${OS_VER}" ]]; then
+OS_INFO=$( get_os_info )
+if [[ -z "${OS_INFO}" ]]; then
     write_log "Unknown OS version"
     exit $ERR_UNKNOWN_OS
 fi
 
-VERSION_CODE=$( get_version_code "${OS_VER}" "${MFA_SCRIPT_DIR}/${VER_FILENAME}" )
+VERSION_CODE=$( get_supported_os_code "${OS_INFO}" "${MFA_SCRIPT_DIR}/${VER_FILENAME}" )
 if [[ -z "${VERSION_CODE}" ]]; then
-    write_log "Unsupported OS version: ${OS_VER}"
+    write_log "Unsupported OS version: ${OS_INFO}"
     exit $ERR_UNSUPPORTED_OS
 fi
 
@@ -138,21 +156,24 @@ if [ -f "${LOGO_FILE}" ]; then
     cat "${LOGO_FILE}"
 fi
 
+echo -e "\n\n Self Service Portal for Linux Installer"
 CUR_YEAR=$(date +"%Y")
-echo -e "\n Copyright (c) ${CUR_YEAR} MultiFactor"
-echo -e "\n Version: ${OS_VER}\n ----------------------------------------------------\n"
+echo -e " Copyright (c) ${CUR_YEAR} MultiFactor"
+echo " Release: ${OS_INFO}"
+echo " Version: ${SCRIPT_VERSION}"
+echo " ----------------------------------------------------"
 
 sleep 1
 
 NOW=$(date +'%d.%m.%Y %H:%M:%S')
-echo "Starting at ${NOW}. Version: ${OS_VER}. Version code: ${VERSION_CODE}" > "${MFA_OUTPUT_FILE}"
+echo "Starting at ${NOW}. Release: ${OS_INFO}. Version code: ${VERSION_CODE}" > "${MFA_OUTPUT_FILE}"
 
 
 
 #############################
 ##  Download dependencies  ##
 #############################
-write_log "Getting required modules"
+write_log "\nGetting required modules"
 
 function get_deps() {
     for path in $(sudo cat < "${MFA_SCRIPT_DIR}/${DEPS_FILENAME}"); do
@@ -166,7 +187,9 @@ function get_deps() {
         fi
     
         local f_name="${MFA_SCRIPT_DIR}/${path}"
-        try_download "${REPO_BASE_PATH}/${path}" "${f_name}"
+        if (( $_OFFLINE_MODE == 0 )); then
+            try_download "${REPO_BASE_PATH}/${path}" "${f_name}"
+        fi
         check_file_exists "${f_name}"
     done
 }
@@ -194,7 +217,9 @@ function get_modules() {
         local f_src="${REPO_BASE_PATH}/modules/${VERSION_CODE}/${mod_file}.sh"
         local f_dst="${MODULES_DIR}/${mod_file}.sh"
 
-        try_download "${f_src}" "${f_dst}"
+        if (( $_OFFLINE_MODE == 0 )); then
+            try_download "${f_src}" "${f_dst}"
+        fi
         check_file_exists "${f_dst}"
         sudo chmod -x "${f_dst}"
 

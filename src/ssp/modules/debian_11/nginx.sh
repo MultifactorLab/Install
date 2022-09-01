@@ -22,7 +22,7 @@ write_log " - Configuring server..."
 } &>> "${MFA_OUTPUT_FILE}"
 assert_success
 
-site_dns=$( get_required_input "   Enter your SSP server Domain Name" )
+site_dns=$( get_input "   Enter your SSP server Domain Name" 1 )
 
 sudo sed -i "s/__dns__/${site_dns}/g" "${SITE_FILE}"
 sudo ln -sf "${SITE_FILE}" /etc/nginx/sites-enabled/ssp
