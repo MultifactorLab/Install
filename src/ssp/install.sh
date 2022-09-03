@@ -18,7 +18,6 @@ ERR_INCORRECT_ARG=71
 #######################################
 # Flags
 #######################################
-OFFLINE_MODE='false'
 FORCE_MODE='false'
 SKIP='false'
 POST_CLEANUP='true'
@@ -141,22 +140,23 @@ mark_as_trash() {
 
 get_dependencies() {
     for path in $(sudo cat < "${DEPS_FILE}"); do
-
-        if [ -f "${path}" ] && [[ "${FORCE_MODE}" == 'false' ]]; then
-            continue;
-        fi 
-
         local dir=$(dirname $path)
 
         if [[ "${dir}" != "." ]]; then
             local d_name="${MFA_SCRIPT_DIR}/${dir}"
-            sudo mkdir -p "${d_name}"
-            sudo chmod 777 "${d_name}"
+            if [ ! -d "${dir}" ]; then
+                sudo mkdir -p "${d_name}"
+                sudo chmod 777 "${d_name}"
+            fi
 
             mark_as_trash "${d_name}"
         fi
 
         local f_name="${MFA_SCRIPT_DIR}/${path}"
+        if [ -f "${f_name}" ] && [[ "${FORCE_MODE}" == 'false' ]]; then
+            continue
+        fi 
+
         try_download "${REPO_BASE_PATH}/${path}" "${f_name}"
         check_file_exists "${f_name}"
     done
@@ -174,7 +174,7 @@ get_req_files() {
     for file in "${REQUIRED_FILES[@]}"; do
 
         if [ -f "${file}" ] && [[ "${FORCE_MODE}" == 'false' ]]; then
-            continue;
+            continue
         fi 
 
         local f_name=$( get_filename_from_path "${file}" )
@@ -362,6 +362,8 @@ get_modules() {
 
         local f_dst="${MODULES_DIR}/${mod_file}.sh"
         if [[ -f "${f_dst}" ]] && [[ "${FORCE_MODE}" == 'false' ]]; then
+            MODULES=( "${MODULES[@]}" "${f_dst}" )
+            mark_as_trash "${f_dst}"
             continue
         fi
 
@@ -379,15 +381,13 @@ get_modules
 
 sudo chmod 777 -R $MFA_SCRIPT_DIR
 
-
-
-###################
-##  Run modules  ##
-###################
+#######################################
+# Run modules
+#######################################
 run_modules() {
     for mod_file in "${MODULES[@]}"; do 
         check_file_exists "${mod_file}"
-        
+
         . "${mod_file}"
         assert_success
     done

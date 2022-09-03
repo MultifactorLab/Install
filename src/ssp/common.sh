@@ -87,7 +87,7 @@ get_supported_os_code() {
     for line in $(sudo cat < $2); do
         if [[ "${1}" == "${line}" ]]; then
             res="${1// /_}"
-            break;
+            break
         fi
     done
 
