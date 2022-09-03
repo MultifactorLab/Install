@@ -1,15 +1,31 @@
 #!/usr/bin/env bash
 set -uo pipefail
 
-SCRIPT_VERSION="1.0"
+SCRIPT_VERSION="1.1"
 
+#######################################
 # Error codes
+#######################################
 ERR_SUDO_PRIV=64
-ERR_SCR_NOT_FOUND=65
+ERR_FILE_NOT_FOUND=65
 ERR_UNKNOWN_OS=66
 ERR_UNSUPPORTED_OS=67
 ERR_ALREADY_EXECUTING=68
+ERR_UNEXPECTED_OPT=69
+ERR_INCORRECT_OPT=70
+ERR_INCORRECT_ARG=71
 
+#######################################
+# Flags
+#######################################
+OFFLINE_MODE='false'
+FORCE_MODE='false'
+SKIP='false'
+POST_CLEANUP='true'
+
+#######################################
+# Check SUDO privilege
+#######################################
 # Run as a superuser and do not ask for a password. Exit status as successful
 sudo -n true
 
@@ -19,12 +35,32 @@ if (( $? != 0 )); then
     echo "You should have sudo privilege to run this script"
     exit $ERR_SUDO_PRIV
 fi
-# current dir
+
+#######################################
+# Variables
+#######################################
 MFA_SCRIPT_DIR="$(dirname ${BASH_SOURCE[0]})"
-# log file
 MFA_OUTPUT_FILE="$MFA_SCRIPT_DIR/install-log.txt"
 
-# prevent to start multiple script instances
+REPO_BASE_PATH="https://raw.githubusercontent.com/MultifactorLab/Install/main/src/ssp"
+
+COMMON_FILE="${MFA_SCRIPT_DIR}/common.sh"
+VAR_FILE="${MFA_SCRIPT_DIR}/variables.sh"
+VER_FILE="${MFA_SCRIPT_DIR}/versions"
+DEPS_FILE="${MFA_SCRIPT_DIR}/deps"
+PIPELINE_FILE="${MFA_SCRIPT_DIR}/pipeline"
+LOGO_FILE="${MFA_SCRIPT_DIR}/logo"
+
+REQUIRED_FILES=("${COMMON_FILE}" "${VAR_FILE}" "${VER_FILE}" "${DEPS_FILE}" "${PIPELINE_FILE}" "${LOGO_FILE}")
+
+SKIPPED_STEPS=( 'EMPTY' )
+_TRASH=()
+
+CUR_YEAR=$(date +"%Y")
+
+#######################################
+# Preventing multiple running
+#######################################
 LOCKFILE="${MFA_SCRIPT_DIR}/lock"
 if [ -f "${LOCKFILE}" ]; then
     echo -e "Only one script instance can be run!\nStop another instance or remove this file: ${LOCKFILE}"
@@ -33,14 +69,14 @@ else
     touch "${LOCKFILE}"
 fi
 
-_SKIPPED_STEPS=( "EMPTY" )
-_OFFLINE_MODE=0
-_TRASH=()
+#######################################
+# Removes temporary files and scripts
+#######################################
 cleanup() {
     trap - SIGINT SIGTERM ERR EXIT
     sudo rm -f "${LOCKFILE}"
 
-    if (( $_OFFLINE_MODE == 0 )); then
+    if [[ "${POST_CLEANUP}" == 'true' ]]; then
         for path in "${_TRASH[@]}"; do
             if [ -d "${path}" ] && [ -e "${path}" ]; then
                 sudo rm -r "${path}"
@@ -54,130 +90,64 @@ cleanup() {
 }
 trap cleanup SIGINT SIGTERM ERR EXIT
 
-function try_download() {
+#######################################
+# Gets file from http
+# Globals:
+#  MFA_OUTPUT_FILE
+# Arguments:
+#  Remote file path
+#  Local destination file path
+#######################################
+try_download() {
     {
         wget --tries 2 --timeout 5 -O $2 $1
     } &>> "${MFA_OUTPUT_FILE}"
 }
 
-function check_file_exists() {
+#######################################
+# Checks that file exists
+# Globals:
+#  ERR_FILE_NOT_FOUND
+# Arguments:
+#  File path
+#######################################
+check_file_exists() {
     if [ ! -f "${1}" ]; then
-        echo -e "Script file was not found: ${1}.\nFor more information see logs."
-        exit $ERR_SCR_NOT_FOUND
+        echo "File not found: ${1}"
+        echo "For more information see logs."
+        exit $ERR_FILE_NOT_FOUND
     fi  
 }
 
-function get_filename_from_path() {
+#######################################
+# Returns filename.extension from path
+# Arguments:
+#  File path
+#######################################
+get_filename_from_path() {
     echo "$( basename -- "${@}" )"
 }
 
-function mark_as_trash() {
+#######################################
+# Marks file as trash
+# Globals
+#  _TRASH
+# Arguments:
+#  File path
+#######################################
+mark_as_trash() {
     _TRASH=( "${_TRASH[@]}" "${@}" )
 }
 
-usage() {
-    cat <<EOF
-Usage: $(basename "${BASH_SOURCE[0]}") [-o] -p param_value arg1 [arg2...]
+get_dependencies() {
+    for path in $(sudo cat < "${DEPS_FILE}"); do
 
-Script description here.
+        if [ -f "${path}" ] && [[ "${FORCE_MODE}" == 'false' ]]; then
+            continue;
+        fi 
 
-Available options:
-
--o,  --offline      prevent to download resources from the MultifactorLab repositories
--s,  --skip
-EOF
-    exit
-}
-
-
-
-######################
-##  Get main files  ##
-######################
-
-REPO_BASE_PATH="https://raw.githubusercontent.com/MultifactorLab/Install/main/src/ssp"
-
-COMMON_FILENAME="common.sh"
-VAR_FILENAME="variables.sh"
-VER_FILENAME="versions"
-DEPS_FILENAME="deps"
-PIPELINE_FILENAME="pipeline"
-LOGO_FILENAME="logo"
-
-echo "Downloading required files..." > "${MFA_OUTPUT_FILE}"
-
-function get_req_files() {
-    local files=("${COMMON_FILENAME}" "${VAR_FILENAME}" "${VER_FILENAME}" "${DEPS_FILENAME}" "${PIPELINE_FILENAME}" "${LOGO_FILENAME}")
-    for file in "${files[@]}"; do
-        local f_name=$( get_filename_from_path "${file}" )
-        local file_path="${MFA_SCRIPT_DIR}/${f_name}"
-
-        if (( $_OFFLINE_MODE == 0 )); then
-            try_download "${REPO_BASE_PATH}/${file}" "${file_path}"
-        fi
-       
-        check_file_exists "${file_path}"
-        mark_as_trash "${file_path}"
-    done
-}
-get_req_files
-
-. "${MFA_SCRIPT_DIR}/${COMMON_FILENAME}"
-. "${MFA_SCRIPT_DIR}/${VAR_FILENAME}"
-
-function write_log() {
-    log "${@}" "${MFA_OUTPUT_FILE}"
-}
-
-
-
-########################
-##  Check OS version  ##
-########################
-OS_INFO=$( get_os_info )
-if [[ -z "${OS_INFO}" ]]; then
-    write_log "Unknown OS version"
-    exit $ERR_UNKNOWN_OS
-fi
-
-VERSION_CODE=$( get_supported_os_code "${OS_INFO}" "${MFA_SCRIPT_DIR}/${VER_FILENAME}" )
-if [[ -z "${VERSION_CODE}" ]]; then
-    write_log "Unsupported OS version: ${OS_INFO}"
-    exit $ERR_UNSUPPORTED_OS
-fi
-
-
-
-####################
-##  Show WELCOME  ##
-####################
-LOGO_FILE="${MFA_SCRIPT_DIR}/${LOGO_FILENAME}"
-if [ -f "${LOGO_FILE}" ]; then
-    cat "${LOGO_FILE}"
-fi
-
-echo -e "\n\n Self Service Portal for Linux Installer"
-CUR_YEAR=$(date +"%Y")
-echo -e " Copyright (c) ${CUR_YEAR} MultiFactor"
-echo " Release: ${OS_INFO}"
-echo " Version: ${SCRIPT_VERSION}"
-echo " ----------------------------------------------------"
-
-sleep 1
-
-NOW=$(date +'%d.%m.%Y %H:%M:%S')
-echo "Starting at ${NOW}. Release: ${OS_INFO}. Version code: ${VERSION_CODE}" > "${MFA_OUTPUT_FILE}"
-
-
-
-#############################
-##  Download dependencies  ##
-#############################
-write_log "\nGetting required modules"
-
-function get_deps() {
-    for path in $(sudo cat < "${MFA_SCRIPT_DIR}/${DEPS_FILENAME}"); do
         local dir=$(dirname $path)
+
         if [[ "${dir}" != "." ]]; then
             local d_name="${MFA_SCRIPT_DIR}/${dir}"
             sudo mkdir -p "${d_name}"
@@ -185,21 +155,197 @@ function get_deps() {
 
             mark_as_trash "${d_name}"
         fi
-    
+
         local f_name="${MFA_SCRIPT_DIR}/${path}"
-        if (( $_OFFLINE_MODE == 0 )); then
-            try_download "${REPO_BASE_PATH}/${path}" "${f_name}"
-        fi
+        try_download "${REPO_BASE_PATH}/${path}" "${f_name}"
         check_file_exists "${f_name}"
     done
 }
-get_deps
+
+#######################################
+# Get required files from server
+# Globals:
+#  REQUIRED_FILES
+#  REPO_BASE_PATH
+#######################################
+get_req_files() {
+    echo "Downloading required files..." > "${MFA_OUTPUT_FILE}"
+
+    for file in "${REQUIRED_FILES[@]}"; do
+
+        if [ -f "${file}" ] && [[ "${FORCE_MODE}" == 'false' ]]; then
+            continue;
+        fi 
+
+        local f_name=$( get_filename_from_path "${file}" )
+        try_download "${REPO_BASE_PATH}/${f_name}" "${file}"       
+       
+        check_file_exists "${file}"
+        mark_as_trash "${file}"
+
+    done
+}
+
+#######################################
+# Shaws information about this script and its arguments
+#######################################
+help() {
+    cat <<EOF
+
+Copyright (c) ${CUR_YEAR} MultiFactor
+Self Service Portal Installer
+
+Available options:
+┌─────┬─────────────────────────────────────────────────────────┬─────────────────────────┐
+│ Opt │ Description                                             │ Examples                │
+├─────┼─────────────────────────────────────────────────────────┼─────────────────────────┤
+│ -h  │ Displays help.                                          │ install.sh -h           │
+├─────┼─────────────────────────────────────────────────────────┼─────────────────────────┤
+│ -v  │ Displays scropt version.                                │ install.sh -v           │
+├─────┼─────────────────────────────────────────────────────────┼─────────────────────────┤
+│ -l  │ List installer stages. First will try to display stages │ install.sh -l           │
+│     │ using available resources. If resources don't exist     │                         │
+│     │ will try to get them from the MultiFactor repositories. │                         │
+├─────┼─────────────────────────────────────────────────────────┼─────────────────────────┤
+│ -o  │ Offline mode. Prevents getting required resources       │ install.sh -o           │
+│     │ from the MultiFactor repositories.                      │                         │
+│     │ Use this option if you are sure that all                │                         │
+│     │ required resources have already been downloaded.        │                         │
+│     │ Also activates no-cleanup mode (option [-c]).           │                         │
+│     │ Conflicts with the option [-f]                          │                         │
+├─────┼─────────────────────────────────────────────────────────┼─────────────────────────┤
+│ -f  │ Force mode. Forces to get required resources            │ install.sh -f           │
+│     │ from the MultiFactor repositories. Overwrites existed   │                         │
+│     │ files.                                                  │                         │
+├─────┼─────────────────────────────────────────────────────────┼─────────────────────────┤
+│ -c  │ No-cleanup mode. Prevents cleanup of temporary          │ install.sh -c           │
+│     │ files and scripts. This mode is enabled by default      │                         │
+│     │ if the option [-o] is used.                             │                         │
+├─────┼─────────────────────────────────────────────────────────┼─────────────────────────┤
+│ -s  │ Skips specified installer stages.                       │ install.sh -s stg       │
+│     │ To list all available stages                            │ install.sh -s stgA,stgB │
+│     │ run script with option [-l].                            │                         │
+│     │ Arguments:                                              │                         │
+│     │ Stage name (or names separated by commas).              │                         │
+└─────┴─────────────────────────────────────────────────────────┴─────────────────────────┘
+
+EOF
+    exit 0
+}
+
+version() {
+    echo "${SCRIPT_VERSION}"
+    exit 0;
+}
+
+display_stages() {
+    if [ ! -f "${PIPELINE_FILE}" ]; then
+        try_download "${REPO_BASE_PATH}/$(get_filename_from_path "${PIPELINE_FILE}")" "${PIPELINE_FILE}"
+        check_file_exists "${PIPELINE_FILE}"
+    fi 
+    echo "Installer pipeline stages:"
+    sudo cat "${PIPELINE_FILE}"; echo
+    exit 0
+}
+
+parse_skip_args() {
+    local patt="^[[:alpha:]][[:alpha:]]*(,[[:alpha:]][[:alpha:]]*)*$"
+    if [[ ! "${1}" =~ "${patt}" ]]; then
+        echo "Invalid arguments after option [-s]"
+        exit $ERR_INCORRECT_ARG
+    fi
+
+    SKIP='true'
+    SKIPPED_STEPS=(${1//;/ })
+}
+
+#######################################
+# Reads script arguments and sets flags
+#######################################
+while getopts ':hvlfcs:' flag; do
+    case "${flag}" in
+        h) help ;;
+        v) version ;;
+        l) display_stages ;;
+        f) FORCE_MODE='true' ;;
+        c) POST_CLEANUP='false' ;;
+        s) parse_skip_args $OPTARG ;;
+        *) echo "Unexpected option" 
+        exit $ERR_UNEXPECTED_OPT
+        ;;
+    esac
+done
+
+display_opts() {
+    if [[ "${FORCE_MODE}" == 'true' ]]; then
+        echo "[Force mode]"
+    fi
+
+    if [[ "${POST_CLEANUP}" == 'false' ]]; then
+        echo "[No-cleanup mode]"
+    fi
+
+    if [[ "${SKIP}" == 'true' ]]; then
+        echo "[Skip stages: ${SKIPPED_STEPS[@]}]"
+    fi
+}
+
+#######################################
+# START
+#######################################
+get_req_files
+
+. "${COMMON_FILE}"
+. "${VAR_FILE}"
 
 
+write_log() {
+    log "${@}" "${MFA_OUTPUT_FILE}"
+}
 
-########################
-##  Download modules  ##
-########################
+#######################################
+# Check OS version 
+#######################################
+OS_INFO=$( get_os_info )
+if [[ -z "${OS_INFO}" ]]; then
+    write_log "Unknown OS version"
+    exit $ERR_UNKNOWN_OS
+fi
+
+VERSION_CODE=$( get_supported_os_code "${OS_INFO}" "${VER_FILE}" )
+if [[ -z "${VERSION_CODE}" ]]; then
+    write_log "Unsupported OS version: ${OS_INFO}"
+    exit $ERR_UNSUPPORTED_OS
+fi
+
+#######################################
+# Show WELCOME
+#######################################
+if [ -f "${LOGO_FILE}" ]; then
+    cat "${LOGO_FILE}"
+fi
+
+echo -e "\n\n Self Service Portal for Linux Installer"
+echo -e " Copyright (c) ${CUR_YEAR} MultiFactor"
+echo " Release: ${OS_INFO}"
+echo " Version: ${SCRIPT_VERSION}"
+echo " ----------------------------------------------------"
+display_opts
+
+sleep 1
+
+NOW=$(date +'%d.%m.%Y %H:%M:%S')
+echo "Starting at ${NOW}. Release: ${OS_INFO}. Version code: ${VERSION_CODE}" > "${MFA_OUTPUT_FILE}"
+
+#######################################
+# Download dependencies 
+#######################################
+write_log "\nGetting required modules"
+get_dependencies
+
+#######################################
+# Download modules 
+#######################################
 MODULES_DIR="${MFA_SCRIPT_DIR}/modules"
 sudo mkdir -p "${MODULES_DIR}"
 sudo chmod 777 "${MODULES_DIR}"
@@ -207,19 +353,21 @@ mark_as_trash "${MODULES_DIR}"
 
 MODULES=()
 
-function get_modules() {
-    for mod_file in $(sudo cat < "${MFA_SCRIPT_DIR}/${PIPELINE_FILENAME}"); do 
-        local skipped=$( arr_contains_element $_SKIPPED_STEPS "${mod_file}" )
+get_modules() {
+    for mod_file in $(sudo cat < "${PIPELINE_FILE}"); do 
+        local skipped=$( arr_contains_element $SKIPPED_STEPS "${mod_file}" )
         if [[ -n "${skipped}" ]]; then
             continue
-        fi    
+        fi  
+
+        local f_dst="${MODULES_DIR}/${mod_file}.sh"
+        if [[ -f "${f_dst}" ]] && [[ "${FORCE_MODE}" == 'false' ]]; then
+            continue
+        fi
 
         local f_src="${REPO_BASE_PATH}/modules/${VERSION_CODE}/${mod_file}.sh"
-        local f_dst="${MODULES_DIR}/${mod_file}.sh"
-
-        if (( $_OFFLINE_MODE == 0 )); then
-            try_download "${f_src}" "${f_dst}"
-        fi
+        try_download "${f_src}" "${f_dst}"
+        
         check_file_exists "${f_dst}"
         sudo chmod -x "${f_dst}"
 
@@ -236,11 +384,9 @@ sudo chmod 777 -R $MFA_SCRIPT_DIR
 ###################
 ##  Run modules  ##
 ###################
-function run_modules() {
+run_modules() {
     for mod_file in "${MODULES[@]}"; do 
-        if [ ! -f "${mod_file}" ]; then
-            continue
-        fi
+        check_file_exists "${mod_file}"
         
         . "${mod_file}"
         assert_success

@@ -3,7 +3,7 @@ set -uo pipefail
 
 ERR_WRONG=113
 
-function log() {
+log() {
   printf -- "${1}\n" 
   printf -- "${1}\n" >> "${2}"
 }
@@ -14,7 +14,7 @@ function log() {
 # output: Please enter variable: 
 # non required input: v=$( get_input "Please enter variable" )
 # output: Please enter variable (optional): 
-function get_input() {
+get_input() {
     local req=${2-0}
     if (( $req == 1 )); then
         echo -e -n "$1: " >&2
@@ -36,14 +36,14 @@ function get_input() {
     fi  
 }
 
-function assert_success() {
+assert_success() {
     if [[ $? -ne 0 ]]; then
         echo -e "Something went wrong.\nFor more information see logs."
         exit $ERR_WRONG
     fi
 }
 
-function get_os_info() {
+get_os_info() {
     local OS=""
     local VER=""
 
@@ -80,7 +80,7 @@ function get_os_info() {
     fi
 }
 
-function get_supported_os_code() {
+get_supported_os_code() {
     IFS=$'\n'       # make newlines the only separator
     set -f          # disable globbing
     local res=""
@@ -94,23 +94,7 @@ function get_supported_os_code() {
     echo "${res}"
 }
 
-# function get_version_code() {
-#     local pat="^([[:alpha:]][[:alpha:]]*_[[:digit:]][[:digit:]]*) # $1$"
-
-#     IFS=$'\n'       # make newlines the only separator
-#     set -f          # disable globbing
-#     local res=""
-#     for line in $(sudo cat < $2); do
-#         if [[ $line =~ $pat ]]; then
-#             res="${BASH_REMATCH[1]}"
-#             break
-#         fi
-#     done
-
-#     echo "${res}"
-# }
-
-function arr_contains_element() {
+arr_contains_element() {
     local arr=$1[@]
     local res=""
     for el in "${arr[@]}"; do
