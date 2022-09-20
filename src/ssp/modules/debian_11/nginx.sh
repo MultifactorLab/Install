@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+set -uo pipefail 
 
 write_log "\nInstalling and setting up nginx"
 write_log " - Installing packages..."
@@ -7,12 +8,18 @@ write_log " - Installing packages..."
 } &>> "${MFA_OUTPUT_FILE}"
 assert_success
 
-write_log " - Starting nginx..."
 {
-    sudo service nginx start
+    sudo nginx -t
 } &>> "${MFA_OUTPUT_FILE}"
-assert_success
 
+if [[ $( is_success ) == "true" ]]; then
+    {
+        sudo service nginx start
+    } &>> "${MFA_OUTPUT_FILE}"
+    assert_success
+fi
+
+write_log " - Configuring nginx..."
 sudo chmod a+rw /etc/nginx/sites-available/
 
 SITE_FILE="/etc/nginx/sites-available/${MFA_SSP_NGINX_FILE}"
@@ -24,7 +31,20 @@ assert_success
 
 site_dns=$( get_input "   Enter your SSP server Domain Name" 1 )
 
+
 sudo sed -i "s/__dns__/${site_dns}/g" "${SITE_FILE}"
 sudo ln -sf "${SITE_FILE}" /etc/nginx/sites-enabled/ssp
+
+write_log " - Restarting nginx..."
+
+{
+    sudo nginx -t
+} &>> "${MFA_OUTPUT_FILE}"
+assert_success
+
+{
+    sudo service nginx start
+} &>> "${MFA_OUTPUT_FILE}"
+assert_success
 
 sudo systemctl reload nginx

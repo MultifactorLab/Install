@@ -16,24 +16,44 @@ log() {
 # output: Please enter variable (optional): 
 get_input() {
     local req=${2-0}
+    local silently=${3-0}
     if (( $req == 1 )); then
         echo -e -n "$1: " >&2
     else
         echo -e -n "$1 (optional): " >&2
     fi
-   
-    read res
+    
+    if (( $silently == 1)); then
+        read -s res
+    else
+        read res
+    fi
+
     #if string is not empty or not required
     if [[ -n "${res}" ]] || (( $req != 1 )); then
         echo "$res"
     else
         while [ -z $res ]; do
 			echo -e -n "$1: " >&2
-            read inp
+
+            if (( $silently == 1)); then
+                read -s inp
+            else
+                read inp
+            fi
+
             res=$inp
         done
         echo "$res"
     fi  
+}
+
+is_success() {
+    if [[ $? -ne 0 ]]; then
+        echo "false"
+    else
+        echo "true"
+    fi
 }
 
 assert_success() {

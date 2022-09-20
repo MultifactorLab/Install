@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -uo pipefail
 
-SCRIPT_VERSION="1.1"
+SCRIPT_VERSION="1.2"
 
 #######################################
 # Error codes
@@ -30,7 +30,7 @@ sudo -n true
 
 # Test the last variable's exit code and see if it equals '0'. 
 # If not, exit with an error and print a given message to the terminal.
-if (( $? != 0 )); then
+if ! sudo -n true; then
     echo "You should have sudo privilege to run this script"
     exit $ERR_SUDO_PRIV
 fi
@@ -38,7 +38,7 @@ fi
 #######################################
 # Variables
 #######################################
-MFA_SCRIPT_DIR="$(dirname ${BASH_SOURCE[0]})"
+MFA_SCRIPT_DIR="$(dirname "${BASH_SOURCE[0]}")"
 MFA_OUTPUT_FILE="$MFA_SCRIPT_DIR/install-log.txt"
 
 REPO_BASE_PATH="https://raw.githubusercontent.com/MultifactorLab/Install/main/src/ssp"
@@ -99,7 +99,7 @@ trap cleanup SIGINT SIGTERM ERR EXIT
 #######################################
 try_download() {
     {
-        wget --tries 2 --timeout 5 -O $2 $1
+        wget --tries 2 --timeout 5 -O "$2" "$1"
     } &>> "${MFA_OUTPUT_FILE}"
 }
 
@@ -140,7 +140,8 @@ mark_as_trash() {
 
 get_dependencies() {
     for path in $(sudo cat < "${DEPS_FILE}"); do
-        local dir=$(dirname $path)
+        local dir
+        dir=$(dirname "$path")
 
         if [[ "${dir}" != "." ]]; then
             local d_name="${MFA_SCRIPT_DIR}/${dir}"
@@ -177,7 +178,8 @@ get_req_files() {
             continue
         fi 
 
-        local f_name=$( get_filename_from_path "${file}" )
+        local f_name
+        f_name=$( get_filename_from_path "${file}" )
         try_download "${REPO_BASE_PATH}/${f_name}" "${file}"       
        
         check_file_exists "${file}"
@@ -199,31 +201,29 @@ Available options:
 ┌─────┬─────────────────────────────────────────────────────────┬─────────────────────────┐
 │ Opt │ Description                                             │ Examples                │
 ├─────┼─────────────────────────────────────────────────────────┼─────────────────────────┤
-│ -h  │ Displays help.                                          │ install.sh -h           │
+│ -h  │ Display help.                                           │ install.sh -h           │
 ├─────┼─────────────────────────────────────────────────────────┼─────────────────────────┤
-│ -v  │ Displays scropt version.                                │ install.sh -v           │
+│ -v  │ Display script version.                                 │ install.sh -v           │
 ├─────┼─────────────────────────────────────────────────────────┼─────────────────────────┤
 │ -l  │ List installer stages. First will try to display stages │ install.sh -l           │
 │     │ using available resources. If resources don't exist     │                         │
 │     │ will try to get them from the MultiFactor repositories. │                         │
-├─────┼─────────────────────────────────────────────────────────┼─────────────────────────┤
-│ -o  │ Offline mode. Prevents getting required resources       │ install.sh -o           │
-│     │ from the MultiFactor repositories.                      │                         │
-│     │ Use this option if you are sure that all                │                         │
-│     │ required resources have already been downloaded.        │                         │
-│     │ Also activates no-cleanup mode (option [-c]).           │                         │
-│     │ Conflicts with the option [-f]                          │                         │
 ├─────┼─────────────────────────────────────────────────────────┼─────────────────────────┤
 │ -f  │ Force mode. Forces to get required resources            │ install.sh -f           │
 │     │ from the MultiFactor repositories. Overwrites existed   │                         │
 │     │ files.                                                  │                         │
 ├─────┼─────────────────────────────────────────────────────────┼─────────────────────────┤
 │ -c  │ No-cleanup mode. Prevents cleanup of temporary          │ install.sh -c           │
-│     │ files and scripts. This mode is enabled by default      │                         │
-│     │ if the option [-o] is used.                             │                         │
+│     │ files and scripts.                                      │                         │
 ├─────┼─────────────────────────────────────────────────────────┼─────────────────────────┤
-│ -s  │ Skips specified installer stages.                       │ install.sh -s stg       │
-│     │ To list all available stages                            │ install.sh -s stgA,stgB │
+│ -s  │ Skip specified installer stages.                        │ install.sh -s stg       │
+│     │ To list all available stages run script                 │ install.sh -s stgA,stgB │
+│     │ with option [-l].                                       │                         │
+│     │ Arguments:                                              │                         │
+│     │ Stage name (or names separated by commas).              │                         │
+├─────┼─────────────────────────────────────────────────────────┼─────────────────────────┤
+│ -S  │ Execute specified installer stages only.                │ install.sh -S stg       │
+│     │ To list all available stages                            │ install.sh -S stgA,stgB │
 │     │ run script with option [-l].                            │                         │
 │     │ Arguments:                                              │                         │
 │     │ Stage name (or names separated by commas).              │                         │
@@ -269,7 +269,7 @@ while getopts ':hvlfcs:' flag; do
         l) display_stages ;;
         f) FORCE_MODE='true' ;;
         c) POST_CLEANUP='false' ;;
-        s) parse_skip_args $OPTARG ;;
+        s) parse_skip_args "${OPTARG}" ;;
         *) echo "Unexpected option" 
         exit $ERR_UNEXPECTED_OPT
         ;;
@@ -277,16 +277,12 @@ while getopts ':hvlfcs:' flag; do
 done
 
 display_opts() {
-    if [[ "${FORCE_MODE}" == 'true' ]]; then
-        echo "[Force mode]"
-    fi
-
     if [[ "${POST_CLEANUP}" == 'false' ]]; then
         echo "[No-cleanup mode]"
     fi
 
     if [[ "${SKIP}" == 'true' ]]; then
-        echo "[Skip stages: ${SKIPPED_STEPS[@]}]"
+        echo "[Skip stages: ${SKIPPED_STEPS[*]}]"
     fi
 }
 
@@ -355,7 +351,8 @@ MODULES=()
 
 get_modules() {
     for mod_file in $(sudo cat < "${PIPELINE_FILE}"); do 
-        local skipped=$( arr_contains_element $SKIPPED_STEPS "${mod_file}" )
+        local skipped
+        skipped=$( arr_contains_element $SKIPPED_STEPS "${mod_file}" )
         if [[ -n "${skipped}" ]]; then
             continue
         fi  
@@ -379,7 +376,7 @@ get_modules() {
 }
 get_modules
 
-sudo chmod 777 -R $MFA_SCRIPT_DIR
+sudo chmod 777 -R "$MFA_SCRIPT_DIR"
 
 #######################################
 # Run modules
