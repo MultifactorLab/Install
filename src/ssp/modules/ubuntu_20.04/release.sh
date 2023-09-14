@@ -8,7 +8,7 @@ write_log " - Downloading Self Service Portal release..."
 assert_success
 
 {
-    sydo apt-get install unzip
+    sudo apt-get install unzip
 } &>> "${MFA_OUTPUT_FILE}"
 assert_success
 
