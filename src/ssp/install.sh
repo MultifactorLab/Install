@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -uo pipefail
 
-SCRIPT_VERSION="1.2"
+SCRIPT_VERSION="1.3"
 
 #######################################
 # Error codes
