@@ -104,7 +104,7 @@ get_supported_os_code() {
     IFS=$'\n'       # make newlines the only separator
     set -f          # disable globbing
     local res=""
-    for line in $(sudo cat < $2); do
+    for line in $(sudo cat < "${2}"); do
         if [[ "${1}" == "${line}" ]]; then
             res="${1// /_}"
             break
