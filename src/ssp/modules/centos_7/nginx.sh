@@ -3,6 +3,12 @@ set -uo pipefail
 
 write_log "\nInstalling and setting up nginx"
 write_log " - Installing packages..."
+
+{
+    sudo yum install -y epel-release
+} &>> "${MFA_OUTPUT_FILE}"
+assert_success
+
 {
     sudo yum install -y nginx
 } &>> "${MFA_OUTPUT_FILE}"
@@ -19,24 +25,28 @@ if [[ $( is_success ) == "true" ]]; then
     assert_success
 fi
 
-write_log " - Configuring nginx..."
-sudo chmod a+rw /etc/nginx/sites-available/
+# {
+#     sudo chmod a+rw /etc/nginx/sites-available/
+# } &>> "${MFA_OUTPUT_FILE}"
 
-SITE_FILE="/etc/nginx/sites-available/${MFA_SSP_NGINX_FILE}"
-write_log " - Configuring server..."
+SITE_FILE="/etc/nginx/conf.d/${MFA_SSP_NGINX_FILE}.conf"
+write_log " - Configuring nginx..."
 {
-    sudo cat "${MFA_SCRIPT_DIR}/templates/nginx" > "${SITE_FILE}"
+    sudo cat "${MFA_SCRIPT_DIR}/templates/nginx" | sudo tee "${SITE_FILE}" > /dev/null
 } &>> "${MFA_OUTPUT_FILE}"
 assert_success
 
 site_dns=$( get_input "   Enter your SSP server Domain Name" 1 )
 
+{
+    sudo sed -i "s/__dns__/${site_dns}/g" "${SITE_FILE}"
+} &>> "${MFA_OUTPUT_FILE}"
 
-sudo sed -i "s/__dns__/${site_dns}/g" "${SITE_FILE}"
-sudo ln -sf "${SITE_FILE}" /etc/nginx/sites-enabled/ssp
+{
+    sudo setsebool -P httpd_can_network_connect on
+} &>> "${MFA_OUTPUT_FILE}"
 
 write_log " - Restarting nginx..."
-
 {
     sudo nginx -t
 } &>> "${MFA_OUTPUT_FILE}"

@@ -13,6 +13,16 @@
   ```
 </details>
 
+<details><summary><b>Centos</b></summary>
+
+  ```sh
+  sudo mkdir -p /opt/temp/ssp-installer && sudo chmod a+w /opt/temp/ssp-installer
+  yum list installed | grep wget || sudo yum install -y wget
+  wget -q -O /opt/temp/ssp-installer/install.sh https://raw.githubusercontent.com/MultifactorLab/Install/main/src/ssp/install.sh
+  sudo chmod +x /opt/temp/ssp-installer/install.sh
+  ```
+</details>
+
 ### 2. Run script:
 ```sh
 /opt/temp/ssp-installer/install.sh

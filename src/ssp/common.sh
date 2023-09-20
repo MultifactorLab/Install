@@ -117,7 +117,7 @@ get_supported_os_code() {
 arr_contains_element() {
     local arr=$1[@]
     local res=""
-    for el in "${arr[@]}"; do
+    for el in "${arr[@]+"${arr[@]}"}"; do
         if [[ "${el}" == "${2}" ]]; then
             res="${2}"
             break

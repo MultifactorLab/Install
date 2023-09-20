@@ -71,12 +71,13 @@ fi
 #######################################
 # Removes temporary files and scripts
 #######################################
+# shellcheck disable=SC2317
 cleanup() {
     trap - SIGINT SIGTERM ERR EXIT
     sudo rm -f "${LOCKFILE}"
 
     if [[ "${POST_CLEANUP}" == 'true' ]]; then
-        for path in "${_TRASH[@]}"; do
+        for path in "${_TRASH[@]+"${_TRASH[@]}"}"; do
             if [ -d "${path}" ] && [ -e "${path}" ]; then
                 sudo rm -r "${path}"
             fi
@@ -135,7 +136,7 @@ get_filename_from_path() {
 #  File path
 #######################################
 mark_as_trash() {
-    _TRASH=( "${_TRASH[@]}" "${@}" )
+    _TRASH=( "${_TRASH[@]+"${_TRASH[@]}"}" "${@}" )
 }
 
 get_dependencies() {
@@ -171,8 +172,7 @@ get_dependencies() {
 #######################################
 get_req_files() {
     echo "Downloading required files..." > "${MFA_OUTPUT_FILE}"
-
-    for file in "${REQUIRED_FILES[@]}"; do
+    for file in "${REQUIRED_FILES[@]+"${REQUIRED_FILES[@]}"}"; do
 
         if [ -f "${file}" ] && [[ "${FORCE_MODE}" == 'false' ]]; then
             continue
@@ -359,7 +359,7 @@ get_modules() {
 
         local f_dst="${MODULES_DIR}/${mod_file}.sh"
         if [[ -f "${f_dst}" ]] && [[ "${FORCE_MODE}" == 'false' ]]; then
-            MODULES=( "${MODULES[@]}" "${f_dst}" )
+            MODULES=( "${MODULES[@]+"${MODULES[@]}"}" "${f_dst}" )
             mark_as_trash "${f_dst}"
             continue
         fi
@@ -370,7 +370,7 @@ get_modules() {
         check_file_exists "${f_dst}"
         sudo chmod -x "${f_dst}"
 
-        MODULES=( "${MODULES[@]}" "${f_dst}" )
+        MODULES=( "${MODULES[@]+"${MODULES[@]}"}" "${f_dst}" )
         mark_as_trash "${f_dst}"
     done
 }
@@ -382,7 +382,7 @@ sudo chmod 777 -R "$MFA_SCRIPT_DIR"
 # Run modules
 #######################################
 run_modules() {
-    for mod_file in "${MODULES[@]}"; do 
+    for mod_file in "${MODULES[@]+"${MODULES[@]}"}"; do 
         check_file_exists "${mod_file}"
 
         . "${mod_file}"
