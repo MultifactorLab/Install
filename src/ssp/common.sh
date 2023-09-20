@@ -4,8 +4,10 @@ set -uo pipefail
 ERR_WRONG=113
 
 log() {
-  printf -- "${1}\n" 
-  printf -- "${1}\n" >> "${2}"
+    # shellcheck disable=SC2059
+    printf -- "${1}\n" 
+    # shellcheck disable=SC2059
+    printf -- "${1}\n" >> "${2}"
 }
 
 # returns user's input.
@@ -17,26 +19,26 @@ log() {
 get_input() {
     local req=${2-0}
     local silently=${3-0}
-    if (( $req == 1 )); then
+    if (( req == 1 )); then
         echo -e -n "$1: " >&2
     else
         echo -e -n "$1 (optional): " >&2
     fi
     
-    if (( $silently == 1)); then
+    if (( silently == 1)); then
         read -s res
     else
         read res
     fi
 
     #if string is not empty or not required
-    if [[ -n "${res}" ]] || (( $req != 1 )); then
+    if [[ -n "${res}" ]] || (( req != 1 )); then
         echo "$res"
     else
-        while [ -z $res ]; do
+        while [ -z "${res}" ]; do
 			echo -e -n "$1: " >&2
 
-            if (( $silently == 1)); then
+            if (( silently == 1)); then
                 read -s inp
             else
                 read inp
@@ -115,11 +117,13 @@ get_supported_os_code() {
 }
 
 arr_contains_element() {
-    local arr=$1[@]
+    local t="${1}"
+    shift
+    local arr=("$@")
     local res=""
     for el in "${arr[@]+"${arr[@]}"}"; do
-        if [[ "${el}" == "${2}" ]]; then
-            res="${2}"
+        if [[ "${el}" == "${t}" ]]; then
+            res="${t}"
             break
         fi
     done
