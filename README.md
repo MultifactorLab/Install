@@ -39,3 +39,26 @@ Make your changes then press `ESC` and type `:wq` to save file.
 ```sh
 sudo systemctl restart ssp.service
 ```
+
+## Help
+
+To display version and supported OS use `-i` flag:
+```sh
+/opt/temp/ssp-installer/install.sh -i
+```
+
+To display full help use `-h` flag:
+```sh
+/opt/temp/ssp-installer/install.sh -h
+```
+
+## Release notes
+
+### Version 1.4 | Freedom of Choice
+##### New
+- You can now skip one or more installation steps. To display all the steps, simply run the script with the `-l` flag.
+- Centos 7 support.
+
+### 1.3 | Happy Ubuntoid
+##### New
+- Ubuntu 20.04 support.

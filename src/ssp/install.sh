@@ -212,7 +212,7 @@ Available options:
 ├─────┼─────────────────────────────────────────────────────────┼─────────────────────────┤
 │ -h  │ Display help.                                           │ install.sh -h           │
 ├─────┼─────────────────────────────────────────────────────────┼─────────────────────────┤
-│ -v  │ Display script version.                                 │ install.sh -v           │
+│ -i  │ Display information about this version.                 │ install.sh -i           │
 ├─────┼─────────────────────────────────────────────────────────┼─────────────────────────┤
 │ -l  │ List installer stages. First will try to display stages │ install.sh -l           │
 │     │ using available resources. If resources don't exist     │                         │
@@ -242,8 +242,17 @@ EOF
     exit 0
 }
 
-version() {
+info() {
     echo "${SCRIPT_VERSION}"
+
+    if [ ! -f "${VER_FILE}" ]; then
+        repo_path=$( get_repo_path )
+        try_download "${repo_path}/$(get_filename_from_path "${VER_FILE}")" "${VER_FILE}"
+        check_file_exists "${VER_FILE}"
+    fi 
+    echo "Supported OS:"
+    sudo cat "${VER_FILE}"; echo
+
     exit 0;
 }
 
@@ -272,10 +281,10 @@ parse_skip_args() {
 #######################################
 # Reads script arguments and sets flags
 #######################################
-while getopts ':hvb:lfcs:' flag; do
+while getopts ':hib:lfcs:' flag; do
     case "${flag}" in
         h) help ;;
-        v) version ;;
+        i) info ;;
         b) BRANCH_NAME="${OPTARG}" ;;
         l) display_stages ;;
         f) FORCE_MODE='true' ;;
