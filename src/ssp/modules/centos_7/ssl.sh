@@ -3,7 +3,7 @@
 write_log "\nConfiguring SSL"
 write_log " - Installing Certbot..."
 {
-    sudo yum install -y certbot python3-certbot-nginx
+    sudo yum install -y certbot-nginx
 } &>> "${MFA_OUTPUT_FILE}"
 assert_success
 

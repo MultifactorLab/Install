@@ -5,12 +5,7 @@ write_log " - Setting up Microsoft package repository..."
 # Add the Microsoft package signing key to your list of trusted keys 
 # and add the package repository.
 {
-    sudo rpm -Uvh https://packages.microsoft.com/config/centos/7/packages-microsoft-prod.rpm
-} &>> "${MFA_OUTPUT_FILE}"
-assert_success
-
-{
-    sudo yum makecache
+    sudo rpm -q packages-microsoft-prod || sudo rpm -U https://packages.microsoft.com/config/centos/7/packages-microsoft-prod.rpm
 } &>> "${MFA_OUTPUT_FILE}"
 assert_success
 

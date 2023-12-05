@@ -41,7 +41,9 @@ fi
 MFA_SCRIPT_DIR="$(dirname "${BASH_SOURCE[0]}")"
 MFA_OUTPUT_FILE="$MFA_SCRIPT_DIR/install-log.txt"
 
-REPO_BASE_PATH="https://raw.githubusercontent.com/MultifactorLab/Install/main/src/ssp"
+REPO_BASE_PATH="https://raw.githubusercontent.com/MultifactorLab/Install"
+DEFAULT_BRANCH="main"
+BRANCH_NAME="${DEFAULT_BRANCH}"
 
 COMMON_FILE="${MFA_SCRIPT_DIR}/common.sh"
 VAR_FILE="${MFA_SCRIPT_DIR}/variables.sh"
@@ -71,12 +73,13 @@ fi
 #######################################
 # Removes temporary files and scripts
 #######################################
+# shellcheck disable=SC2317
 cleanup() {
     trap - SIGINT SIGTERM ERR EXIT
     sudo rm -f "${LOCKFILE}"
 
     if [[ "${POST_CLEANUP}" == 'true' ]]; then
-        for path in "${_TRASH[@]}"; do
+        for path in "${_TRASH[@]+"${_TRASH[@]}"}"; do
             if [ -d "${path}" ] && [ -e "${path}" ]; then
                 sudo rm -r "${path}"
             fi
@@ -88,6 +91,10 @@ cleanup() {
     fi
 }
 trap cleanup SIGINT SIGTERM ERR EXIT
+
+get_repo_path() {
+    echo "${REPO_BASE_PATH}/${BRANCH_NAME}/src/ssp"
+}
 
 #######################################
 # Gets file from http
@@ -135,7 +142,7 @@ get_filename_from_path() {
 #  File path
 #######################################
 mark_as_trash() {
-    _TRASH=( "${_TRASH[@]}" "${@}" )
+    _TRASH=( "${_TRASH[@]+"${_TRASH[@]}"}" "${@}" )
 }
 
 get_dependencies() {
@@ -158,7 +165,8 @@ get_dependencies() {
             continue
         fi 
 
-        try_download "${REPO_BASE_PATH}/${path}" "${f_name}"
+        repo_path=$( get_repo_path )
+        try_download "${repo_path}/${path}" "${f_name}"
         check_file_exists "${f_name}"
     done
 }
@@ -166,13 +174,13 @@ get_dependencies() {
 #######################################
 # Get required files from server
 # Globals:
+#  MFA_OUTPUT_FILE
 #  REQUIRED_FILES
-#  REPO_BASE_PATH
+#  FORCE_MODE
 #######################################
 get_req_files() {
     echo "Downloading required files..." > "${MFA_OUTPUT_FILE}"
-
-    for file in "${REQUIRED_FILES[@]}"; do
+    for file in "${REQUIRED_FILES[@]+"${REQUIRED_FILES[@]}"}"; do
 
         if [ -f "${file}" ] && [[ "${FORCE_MODE}" == 'false' ]]; then
             continue
@@ -180,7 +188,8 @@ get_req_files() {
 
         local f_name
         f_name=$( get_filename_from_path "${file}" )
-        try_download "${REPO_BASE_PATH}/${f_name}" "${file}"       
+        repo_path=$( get_repo_path )
+        try_download "${repo_path}/${f_name}" "${file}"       
        
         check_file_exists "${file}"
         mark_as_trash "${file}"
@@ -203,7 +212,7 @@ Available options:
 ├─────┼─────────────────────────────────────────────────────────┼─────────────────────────┤
 │ -h  │ Display help.                                           │ install.sh -h           │
 ├─────┼─────────────────────────────────────────────────────────┼─────────────────────────┤
-│ -v  │ Display script version.                                 │ install.sh -v           │
+│ -i  │ Display information about this version.                 │ install.sh -i           │
 ├─────┼─────────────────────────────────────────────────────────┼─────────────────────────┤
 │ -l  │ List installer stages. First will try to display stages │ install.sh -l           │
 │     │ using available resources. If resources don't exist     │                         │
@@ -214,7 +223,7 @@ Available options:
 │     │ files.                                                  │                         │
 ├─────┼─────────────────────────────────────────────────────────┼─────────────────────────┤
 │ -c  │ No-cleanup mode. Prevents cleanup of temporary          │ install.sh -c           │
-│     │ files and scripts.                                      │                         │
+│     │ files and resources.                                    │                         │
 ├─────┼─────────────────────────────────────────────────────────┼─────────────────────────┤
 │ -s  │ Skip specified installer stages.                        │ install.sh -s stg       │
 │     │ To list all available stages run script                 │ install.sh -s stgA,stgB │
@@ -233,39 +242,50 @@ EOF
     exit 0
 }
 
-version() {
+info() {
     echo "${SCRIPT_VERSION}"
+
+    if [ ! -f "${VER_FILE}" ]; then
+        repo_path=$( get_repo_path )
+        try_download "${repo_path}/$(get_filename_from_path "${VER_FILE}")" "${VER_FILE}"
+        check_file_exists "${VER_FILE}"
+    fi 
+    echo "Supported OS:"
+    sudo cat "${VER_FILE}"; echo
+
     exit 0;
 }
 
 display_stages() {
     if [ ! -f "${PIPELINE_FILE}" ]; then
-        try_download "${REPO_BASE_PATH}/$(get_filename_from_path "${PIPELINE_FILE}")" "${PIPELINE_FILE}"
+        repo_path=$( get_repo_path )
+        try_download "${repo_path}/$(get_filename_from_path "${PIPELINE_FILE}")" "${PIPELINE_FILE}"
         check_file_exists "${PIPELINE_FILE}"
     fi 
-    echo "Installer pipeline stages:"
+    echo "Installer stages:"
     sudo cat "${PIPELINE_FILE}"; echo
     exit 0
 }
 
 parse_skip_args() {
     local patt="^[[:alpha:]][[:alpha:]]*(,[[:alpha:]][[:alpha:]]*)*$"
-    if [[ ! "${1}" =~ "${patt}" ]]; then
+    if [[ ! "${1}" =~ ${patt} ]]; then
         echo "Invalid arguments after option [-s]"
         exit $ERR_INCORRECT_ARG
     fi
 
     SKIP='true'
-    SKIPPED_STEPS=(${1//;/ })
+    SKIPPED_STEPS=(${1//,/ })
 }
 
 #######################################
 # Reads script arguments and sets flags
 #######################################
-while getopts ':hvlfcs:' flag; do
+while getopts ':hib:lfcs:' flag; do
     case "${flag}" in
         h) help ;;
-        v) version ;;
+        i) info ;;
+        b) BRANCH_NAME="${OPTARG}" ;;
         l) display_stages ;;
         f) FORCE_MODE='true' ;;
         c) POST_CLEANUP='false' ;;
@@ -277,8 +297,16 @@ while getopts ':hvlfcs:' flag; do
 done
 
 display_opts() {
+    if [[ "${BRANCH_NAME}" != "${DEFAULT_BRANCH}" ]]; then
+        echo "[Branch: ${BRANCH_NAME}]"
+    fi
+
     if [[ "${POST_CLEANUP}" == 'false' ]]; then
         echo "[No-cleanup mode]"
+    fi
+
+    if [[ "${FORCE_MODE}" == 'true' ]]; then
+        echo "[Force mode]"
     fi
 
     if [[ "${SKIP}" == 'true' ]]; then
@@ -352,25 +380,26 @@ MODULES=()
 get_modules() {
     for mod_file in $(sudo cat < "${PIPELINE_FILE}"); do 
         local skipped
-        skipped=$( arr_contains_element $SKIPPED_STEPS "${mod_file}" )
+        skipped=$( arr_contains_element "${mod_file}" "${SKIPPED_STEPS[@]+"${SKIPPED_STEPS[@]}"}" )
         if [[ -n "${skipped}" ]]; then
             continue
         fi  
 
         local f_dst="${MODULES_DIR}/${mod_file}.sh"
         if [[ -f "${f_dst}" ]] && [[ "${FORCE_MODE}" == 'false' ]]; then
-            MODULES=( "${MODULES[@]}" "${f_dst}" )
+            MODULES=( "${MODULES[@]+"${MODULES[@]}"}" "${f_dst}" )
             mark_as_trash "${f_dst}"
             continue
         fi
 
-        local f_src="${REPO_BASE_PATH}/modules/${VERSION_CODE}/${mod_file}.sh"
+        repo_path=$( get_repo_path )
+        local f_src="${repo_path}/modules/${VERSION_CODE}/${mod_file}.sh"
         try_download "${f_src}" "${f_dst}"
         
         check_file_exists "${f_dst}"
         sudo chmod -x "${f_dst}"
 
-        MODULES=( "${MODULES[@]}" "${f_dst}" )
+        MODULES=( "${MODULES[@]+"${MODULES[@]}"}" "${f_dst}" )
         mark_as_trash "${f_dst}"
     done
 }
@@ -382,7 +411,7 @@ sudo chmod 777 -R "$MFA_SCRIPT_DIR"
 # Run modules
 #######################################
 run_modules() {
-    for mod_file in "${MODULES[@]}"; do 
+    for mod_file in "${MODULES[@]+"${MODULES[@]}"}"; do 
         check_file_exists "${mod_file}"
 
         . "${mod_file}"
