@@ -405,7 +405,7 @@ get_modules() {
 }
 get_modules
 
-sudo chmod 777 -R "$MFA_SCRIPT_DIR"
+sudo chmod 700 -R "$MFA_SCRIPT_DIR"
 
 #######################################
 # Run modules
