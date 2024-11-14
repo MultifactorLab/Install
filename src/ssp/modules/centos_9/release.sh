@@ -1,9 +1,20 @@
 #!/usr/bin/env bash
 
 write_log "\nInstalling application components"
+
+{
+    sudo dnf install -y wget
+} &>> "${MFA_OUTPUT_FILE}"
+assert_success
+
 write_log " - Downloading Self Service Portal release..."
 {  
-    sudo wget https://github.com/MultifactorLab/MultiFactor.SelfService.Windows.Portal/releases/download/1.0.147/MultiFactor.SelfService.Windows.Portal.zip
+    sudo wget https://github.com/MultifactorLab/multifactor-selfservice-portal/releases/latest/download/MultiFactor.SelfService.Linux.Portal.zip
+} &>> "${MFA_OUTPUT_FILE}"
+assert_success
+
+{
+    sudo dnf install -y unzip
 } &>> "${MFA_OUTPUT_FILE}"
 assert_success
 

@@ -4,7 +4,7 @@ write_log "\nSetting up user"
 write_log " - Creating user '${MFA_USER_NAME}'..."
 {
     # Check if user not exists then create it.
-    id -u "${MFA_USER_NAME}" || sudo useradd "${MFA_USER_NAME}"
+    id -u "${MFA_USER_NAME}" || sudo useradd -m "${MFA_USER_NAME}"
 } &>> "${MFA_OUTPUT_FILE}"
 assert_success
 
