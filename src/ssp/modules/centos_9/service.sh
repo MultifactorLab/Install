@@ -14,11 +14,11 @@ sudo sed -i "s/__user__/${MFA_USER_NAME}/g" "${SERVICE_FILE}"
 
 write_log " - Starting service..."
 {
-    sudo systemctl enable ssp.service
+    sudo systemctl enable "${MFA_SSP_SERVICE_FILE}"
 } &>> "${MFA_OUTPUT_FILE}"
 assert_success
 
 {
-    sudo systemctl start ssp.service
+    sudo systemctl start "${MFA_SSP_SERVICE_FILE}"
 } &>> "${MFA_OUTPUT_FILE}"
 assert_success

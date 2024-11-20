@@ -3,7 +3,7 @@
 write_log "\nInstalling application components"
 write_log " - Downloading Self Service Portal release..."
 {  
-    sudo wget https://github.com/MultifactorLab/multifactor-selfservice-portal/releases/download/1.1.10/MultiFactor.SelfService.Linux.Portal.zip
+    sudo wget https://github.com/MultifactorLab/multifactor-selfservice-portal/releases/latest/download/MultiFactor.SelfService.Linux.Portal.zip
 } &>> "${MFA_OUTPUT_FILE}"
 assert_success
 

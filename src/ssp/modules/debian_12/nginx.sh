@@ -4,6 +4,7 @@ set -uo pipefail
 write_log "\nInstalling and setting up nginx"
 write_log " - Installing packages..."
 {
+    sudo apt-get update
     sudo apt-get install -y nginx
 } &>> "${MFA_OUTPUT_FILE}"
 assert_success
@@ -14,7 +15,7 @@ assert_success
 
 if [[ $( is_success ) == "true" ]]; then
     {
-        sudo service nginx start
+        sudo systemctl start nginx
     } &>> "${MFA_OUTPUT_FILE}"
     assert_success
 fi
@@ -42,7 +43,7 @@ write_log " - Restarting nginx..."
 assert_success
 
 {
-    sudo service nginx start
+    sudo systemctl restart nginx
 } &>> "${MFA_OUTPUT_FILE}"
 assert_success
 

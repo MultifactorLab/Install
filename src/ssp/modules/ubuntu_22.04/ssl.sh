@@ -3,11 +3,11 @@
 write_log "\nConfiguring SSL"
 write_log " - Installing Certbot..."
 {
-    sudo yum install -y certbot-nginx
+    sudo apt install -y certbot python3-certbot-nginx
 } &>> "${MFA_OUTPUT_FILE}"
 assert_success
 
-email=$( get_input "   Enter valid email for alerting about problems with the SSL certificate" 1 )
+email=$( get_input "   Enter valid email for alerting about problems with the SSL sertificate" 1 )
 
 write_log " - Getting certificate..."
 {

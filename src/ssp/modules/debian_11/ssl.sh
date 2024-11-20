@@ -7,7 +7,7 @@ write_log " - Installing Certbot..."
 } &>> "${MFA_OUTPUT_FILE}"
 assert_success
 
-email=$( get_input "   Enter valid email for alerting about problems with the SSL sertificate" 1 )
+email=$( get_input "   Enter valid email for alerting about problems with the SSL certificate" 1 )
 
 write_log " - Getting certificate..."
 {
